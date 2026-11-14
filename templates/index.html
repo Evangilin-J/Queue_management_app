@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QueueFlow | Full Stack Queue Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: #f1f5f9;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #1e293b;
+        }
+        .navbar {
+            background: #0f172a;
+        }
+        .card {
+            border: none;
+            border-radius: 14px;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+        }
+        .queue-item {
+            cursor: pointer;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            transition: all 0.2s;
+        }
+        .queue-item:hover {
+            border-color: #6366f1;
+        }
+        .queue-item.active {
+            background: #4f46e5;
+            color: #fff;
+            border-color: #4f46e5;
+        }
+        .queue-item.active .badge {
+            background: #fff !important;
+            color: #4f46e5 !important;
+        }
+        .token-row {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .token-row.top-token {
+            border-left: 5px solid #10b981;
+            background: #f0fdf4;
+        }
+        .stat-card {
+            border-left: 4px solid #4f46e5;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark px-4 py-3 mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand fw-bold"><i class="bi bi-layers-fill me-2 text-info"></i>QueueFlow Manager</span>
+            <div class="d-flex align-items-center gap-3 text-white">
+                <span class="small"><i class="bi bi-person-circle me-1"></i>{{ username }}</span>
+                <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 pb-5">
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-pills mb-4" id="mainTabs">
+            <li class="nav-item">
+                <button class="nav-link active fw-semibold" id="tab-manage" onclick="switchTab('manage')">
+                    <i class="bi bi-list-ol me-1"></i> Queue & Token Operations
+                </button>
+            </li>
+            <li class="nav-item ms-2">
+                <button class="nav-link fw-semibold" id="tab-analytics" onclick="switchTab('analytics')">
+                    <i class="bi bi-bar-chart-line me-1"></i> Analytics Dashboard
+                </button>
+            </li>
+        </ul>
+
+        <!-- VIEW 1: QUEUE OPERATIONS -->
+        <div id="view-manage" class="row g-4">
+            <!-- Left Column: Queues -->
+            <div class="col-lg-4">
+                <div class="card p-4 h-100">
+                    <h5 class="fw-bold mb-3">Active Queues</h5>
+                    <form onsubmit="createQueue(event)" class="input-group mb-3">
+                        <input type="text" id="newQueueName" class="form-control" placeholder="New Queue Name (e.g., Billing)" required>
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg"></i> Add</button>
+                    </form>
+                    <div id="queueList"></div>
+                </div>
+            </div>
+
+            <!-- Right Column: Tokens -->
+            <div class="col-lg-8">
+                <div class="card p-4 h-100">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                        <div>
+                            <h5 class="fw-bold mb-0" id="selectedQueueTitle">Select a Queue</h5>
+                            <small class="text-muted">Top token is highlighted in green and ready for service</small>
+                        </div>
+                        <button class="btn btn-success fw-semibold" id="assignTopBtn" onclick="assignTopToken()" disabled>
+                            <i class="bi bi-check2-circle me-1"></i> Assign Top Token for Service
+                        </button>
+                    </div>
+
+                    <form onsubmit="addToken(event)" class="row g-2 mb-4">
+                        <div class="col-sm-9">
+                            <input type="text" id="personNameInput" class="form-control" placeholder="Enter visitor / customer name to issue token..." required>
+                        </div>
+                        <div class="col-sm-3">
+                            <button class="btn btn-dark w-100" type="submit" id="addTokenBtn" disabled>
+                                <i class="bi bi-ticket-perforated me-1"></i> Issue Token
+                            </button>
+                        </div>
+                    </form>
+
+                    <div id="tokenList">
+                        <div class="text-center text-muted py-5">Select or create a queue on the left to manage tokens.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: ANALYTICS DASHBOARD -->
+        <div id="view-analytics" class="d-none">
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card p-3 stat-card">
+                        <div class="text-muted small fw-semibold">ACTIVE QUEUES</div>
+                        <h3 class="fw-bold mb-0 mt-1" id="statQueues">0</h3>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 stat-card" style="border-left-color: #f59e0b;">
+                        <div class="text-muted small fw-semibold">CURRENTLY WAITING</div>
+                        <h3 class="fw-bold mb-0 mt-1" id="statWaiting">0</h3>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 stat-card" style="border-left-color: #10b981;">
+                        <div class="text-muted small fw-semibold">TOKENS SERVED</div>
+                        <h3 class="fw-bold mb-0 mt-1" id="statServed">0</h3>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 stat-card" style="border-left-color: #06b6d4;">
+                        <div class="text-muted small fw-semibold">AVG WAIT TIME</div>
+                        <h3 class="fw-bold mb-0 mt-1"><span id="statAvgWait">0</span> <small class="fs-6 text-muted">mins</small></h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="card p-4">
+                        <h6 class="fw-bold mb-3">Queue Length & Status Breakdown</h6>
+                        <canvas id="queueChart" height="180"></canvas>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card p-4">
+                        <h6 class="fw-bold mb-3">Wait Time Trend (Recent Served Tokens)</h6>
+                        <canvas id="waitChart" height="180"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedQueueId = null;
+        let selectedQueueName = "";
+        let queueChartInstance = null;
+        let waitChartInstance = null;
+
+        function switchTab(tab) {
+            document.getElementById('tab-manage').classList.toggle('active', tab === 'manage');
+            document.getElementById('tab-analytics').classList.toggle('active', tab === 'analytics');
+            document.getElementById('view-manage').classList.toggle('d-none', tab !== 'manage');
+            document.getElementById('view-analytics').classList.toggle('d-none', tab !== 'analytics');
+            if (tab === 'analytics') loadAnalytics();
+        }
+
+        async function loadQueues() {
+            const res = await fetch('/api/queues');
+            const queues = await res.json();
+            const list = document.getElementById('queueList');
+            list.innerHTML = '';
+
+            if (queues.length === 0) {
+                list.innerHTML = '<p class="text-muted small">No queues yet. Create one above.</p>';
+                return;
+            }
+
+            if (!selectedQueueId && queues.length > 0) {
+                selectedQueueId = queues[0].id;
+                selectedQueueName = queues[0].name;
+            }
+
+            queues.forEach(q => {
+                const div = document.createElement('div');
+                div.className = `queue-item d-flex justify-content-between align-items-center ${q.id === selectedQueueId ? 'active' : ''}`;
+                div.onclick = () => selectQueue(q.id, q.name);
+                div.innerHTML = `
+                    <span class="fw-semibold">${q.name}</span>
+                    <span class="badge bg-primary rounded-pill">${q.waiting_count} waiting</span>
+                `;
+                list.appendChild(div);
+            });
+
+            if (selectedQueueId) {
+                document.getElementById('selectedQueueTitle').innerText = `Queue: ${selectedQueueName}`;
+                document.getElementById('addTokenBtn').disabled = false;
+                loadTokens();
+            }
+        }
+
+        function selectQueue(id, name) {
+            selectedQueueId = id;
+            selectedQueueName = name;
+            loadQueues();
+        }
+
+        async function createQueue(e) {
+            e.preventDefault();
+            const input = document.getElementById('newQueueName');
+            const res = await fetch('/api/queues', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: input.value})
+            });
+            if (res.ok) {
+                const newQ = await res.json();
+                input.value = '';
+                selectedQueueId = newQ.id;
+                selectedQueueName = newQ.name;
+                loadQueues();
+            }
+        }
+
+        async function loadTokens() {
+            if (!selectedQueueId) return;
+            const res = await fetch(`/api/queues/${selectedQueueId}/tokens`);
+            const tokens = await res.json();
+            const list = document.getElementById('tokenList');
+            const assignBtn = document.getElementById('assignTopBtn');
+            list.innerHTML = '';
+
+            assignBtn.disabled = tokens.length === 0;
+
+            if (tokens.length === 0) {
+                list.innerHTML = '<div class="text-center text-muted py-4">No people waiting in this queue right now.</div>';
+                return;
+            }
+
+            tokens.forEach((t, idx) => {
+                const isTop = idx === 0;
+                const row = document.createElement('div');
+                row.className = `token-row ${isTop ? 'top-token' : ''}`;
+                row.innerHTML = `
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge ${isTop ? 'bg-success' : 'bg-secondary'} fs-6">${t.token_number}</span>
+                        <div>
+                            <div class="fw-bold">${t.person_name} ${isTop ? '<span class="badge bg-success-subtle text-success border border-success ms-1">NEXT UP</span>' : ''}</div>
+                            <small class="text-muted">Joined: ${t.created_at}</small>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-secondary btn-sm" title="Move Up" onclick="moveToken(${t.id}, 'up')" ${idx === 0 ? 'disabled' : ''}>
+                            <i class="bi bi-arrow-up"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" title="Move Down" onclick="moveToken(${t.id}, 'down')" ${idx === tokens.length - 1 ? 'disabled' : ''}>
+                            <i class="bi bi-arrow-down"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" title="Cancel Token" onclick="cancelToken(${t.id})">
+                            <i class="bi bi-x-lg"></i> Cancel
+                        </button>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        async function addToken(e) {
+            e.preventDefault();
+            const input = document.getElementById('personNameInput');
+            const res = await fetch(`/api/queues/${selectedQueueId}/tokens`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({person_name: input.value})
+            });
+            if (res.ok) {
+                input.value = '';
+                loadQueues();
+            }
+        }
+
+        async function moveToken(tokenId, direction) {
+            await fetch(`/api/tokens/${tokenId}/move`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({direction})
+            });
+            loadTokens();
+        }
+
+        async function assignTopToken() {
+            const res = await fetch(`/api/queues/${selectedQueueId}/assign-top`, {method: 'POST'});
+            if (res.ok) {
+                const data = await res.json();
+                alert(`Token ${data.token.token_number} (${data.token.person_name}) assigned for service!`);
+                loadQueues();
+            }
+        }
+
+        async function cancelToken(tokenId) {
+            await fetch(`/api/tokens/${tokenId}/cancel`, {method: 'POST'});
+            loadQueues();
+        }
+
+        async function loadAnalytics() {
+            const res = await fetch('/api/analytics');
+            const data = await res.json();
+
+            document.getElementById('statQueues').innerText = data.total_queues;
+            document.getElementById('statWaiting').innerText = data.waiting_total;
+            document.getElementById('statServed').innerText = data.served_total;
+            document.getElementById('statAvgWait').innerText = data.avg_wait_mins;
+
+            const qLabels = data.queue_breakdown.map(q => q.queue_name);
+            const qWaiting = data.queue_breakdown.map(q => q.waiting);
+            const qServed = data.queue_breakdown.map(q => q.served);
+
+            if (queueChartInstance) queueChartInstance.destroy();
+            queueChartInstance = new Chart(document.getElementById('queueChart'), {
+                type: 'bar',
+                data: {
+                    labels: qLabels,
+                    datasets: [
+                        { label: 'Waiting', data: qWaiting, backgroundColor: '#f59e0b' },
+                        { label: 'Served', data: qServed, backgroundColor: '#10b981' }
+                    ]
+                }
+            });
+
+            const wLabels = data.recent_served.map(r => r.token);
+            const wVals = data.recent_served.map(r => r.wait_mins);
+
+            if (waitChartInstance) waitChartInstance.destroy();
+            waitChartInstance = new Chart(document.getElementById('waitChart'), {
+                type: 'line',
+                data: {
+                    labels: wLabels,
+                    datasets: [{
+                        label: 'Wait Time (Minutes)',
+                        data: wVals,
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                }
+            });
+        }
+
+        loadQueues();
+    </script>
+</body>
+</html>
